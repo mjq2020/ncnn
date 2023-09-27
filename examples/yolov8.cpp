@@ -134,38 +134,38 @@ static void post_process(const ncnn::Mat& feat_blob, float prob_threshold, std::
     const int num_class = num_class_bbox - 4;
     const int target_num = feat_blob.w;
     const int channel = feat_blob.c;
-    for (int i = 0; i < channel; i++)
+
+    for (int idx = 0; idx < target_num; idx++)
     {
-        const ncnn::Mat feat = feat_blob.channel(i);
-        for (int idx = 0; idx < target_num; idx++)
+        Object obj;
+        const float* featptr = feat_blob.row(idx * num_class_bbox);
+        int class_index = 0;
+        float class_conf = 0;
+        // for (int k = 0; k < num_class; k++)
+        // {
+        //     float score = featptr[4 + k];
+        //     // printf("CONF:%f\t",score);
+        //     if (score > class_conf)
+        //     {
+        //         class_index = k;
+        //         class_conf = score;
+        //     }
+        // }
+        if (feat_blob[idx + 4 * target_num] > prob_threshold)
         {
-            Object obj;
-            const float* featptr = feat.row(i * num_class_bbox);
-            int class_index = 0;
-            float class_conf = 0;
-            for (int k = 0; k < num_class; k++)
-            {
-                float score = featptr[4 + k];
-                if (score > class_conf)
-                {
-                    class_index = k;
-                    class_conf = score;
-                }
-            }
-            if (class_conf > prob_threshold)
-            {
-                float x = (featptr[0] + featptr[2]) / 2;
-                float y = (featptr[1] + featptr[3]) / 2;
-                float w = featptr[2] - featptr[0];
-                float h = featptr[3] - featptr[1];
-                obj.rect.x = x;
-                obj.rect.y = y;
-                obj.rect.width = w;
-                obj.rect.height = h;
-                obj.label = class_index;
-                obj.prob = class_conf;
-                objects.push_back(obj);
-            }
+            // float x = (feat_blob[idx] + feat_blob[idx + 2 * target_num]) / 2;
+            // float y = (feat_blob[idx + target_num] + feat_blob[idx + 3*target_num]) / 2;
+            float x = feat_blob[idx];
+            float y = feat_blob[idx + target_num];
+            float w = feat_blob[idx + 2 * target_num] - feat_blob[idx];
+            float h = feat_blob[idx + 3 * target_num] - feat_blob[idx + target_num];
+            obj.rect.x = x;
+            obj.rect.y = y;
+            obj.rect.width = w;
+            obj.rect.height = h;
+            obj.label = class_index;
+            obj.prob = class_conf;
+            objects.push_back(obj);
         }
     }
 }
@@ -182,7 +182,7 @@ static int detect_yolov8(const cv::Mat& bgr, std::vector<Object>& objects)
     yolov8.load_model("yolov8.bin");
 
     const int target_size = 640;
-    const float prob_threshold = 0.25f;
+    const float prob_threshold = 25.0f;
     const float nms_threshold = 0.45f;
 
     int img_w = bgr.cols;
@@ -222,16 +222,16 @@ static int detect_yolov8(const cv::Mat& bgr, std::vector<Object>& objects)
     std::vector<Object> proposals;
 
     // stride
-    {
-        ncnn::Mat out;
-        ex.extract("out0", out);
+    // {
+    ncnn::Mat out;
+    ex.extract("out0", out);
 
-        std::vector<Object> objects8;
-        // generate_proposals(anchors, 8, in_pad, out, prob_threshold, objects8);
-        post_process(out, prob_threshold, objects8);
+    std::vector<Object> objects8;
+    // generate_proposals(anchors, 8, in_pad, out, prob_threshold, objects8);
+    post_process(out, prob_threshold, objects8);
 
-        proposals.insert(proposals.end(), objects8.begin(), objects8.end());
-    }
+    proposals.insert(proposals.end(), objects8.begin(), objects8.end());
+    // }
 
     // sort all proposals by score from highest to lowest
     qsort_descent_inplace(proposals);
