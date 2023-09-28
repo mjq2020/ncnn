@@ -27,6 +27,8 @@
 #include <vector>
 
 #define MAX_STRIDE 32
+#define IMGSZ      192
+#define COCO       false
 
 struct Object
 {
@@ -141,17 +143,17 @@ static void post_process(const ncnn::Mat& feat_blob, float prob_threshold, std::
         const float* featptr = feat_blob.row(idx * num_class_bbox);
         int class_index = 0;
         float class_conf = 0;
-        // for (int k = 0; k < num_class; k++)
-        // {
-        //     float score = featptr[4 + k];
-        //     // printf("CONF:%f\t",score);
-        //     if (score > class_conf)
-        //     {
-        //         class_index = k;
-        //         class_conf = score;
-        //     }
-        // }
-        if (feat_blob[idx + 4 * target_num] > prob_threshold)
+        for (int k = 0; k < num_class; k++)
+        {
+            float score = feat_blob[idx + ((4 + k) * target_num)];
+            // printf("CONF:%f\t",score);
+            if (score > class_conf)
+            {
+                class_index = k;
+                class_conf = score;
+            }
+        }
+        if (class_conf > prob_threshold)
         {
             // float x = (feat_blob[idx] + feat_blob[idx + 2 * target_num]) / 2;
             // float y = (feat_blob[idx + target_num] + feat_blob[idx + 3*target_num]) / 2;
@@ -181,8 +183,8 @@ static int detect_yolov8(const cv::Mat& bgr, std::vector<Object>& objects)
     yolov8.load_param("yolov8.param");
     yolov8.load_model("yolov8.bin");
 
-    const int target_size = 640;
-    const float prob_threshold = 25.0f;
+    const int target_size = IMGSZ;
+    const float prob_threshold = 10.0f;
     const float nms_threshold = 0.45f;
 
     int img_w = bgr.cols;
@@ -207,8 +209,9 @@ static int detect_yolov8(const cv::Mat& bgr, std::vector<Object>& objects)
 
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(bgr.data, ncnn::Mat::PIXEL_BGR2RGB, img_w, img_h, w, h);
 
-    int wpad = (w + MAX_STRIDE - 1) / MAX_STRIDE * MAX_STRIDE - w;
-    int hpad = (h + MAX_STRIDE - 1) / MAX_STRIDE * MAX_STRIDE - h;
+    int wpad = target_size - w;
+    int hpad = target_size - h;
+
     ncnn::Mat in_pad;
     ncnn::copy_make_border(in, in_pad, hpad / 2, hpad - hpad / 2, wpad / 2, wpad - wpad / 2, ncnn::BORDER_CONSTANT, 114.f);
 
@@ -270,6 +273,7 @@ static int detect_yolov8(const cv::Mat& bgr, std::vector<Object>& objects)
 
 static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects)
 {
+#if COCO
     static const char* class_names[] = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
         "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -280,27 +284,50 @@ static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects)
         "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
         "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
         "hair drier", "toothbrush"};
+#else
+    static const char* class_names[] = {"aeroplane",
+                                        "bicycle",
+                                        "bird",
+                                        "boat",
+                                        "bottle",
+                                        "bus",
+                                        "car",
+                                        "cat",
+                                        "chair",
+                                        "cow",
+                                        "diningtable",
+                                        "dog",
+                                        "horse",
+                                        "motorbike",
+                                        "person",
+                                        "pottedplant",
+                                        "sheep",
+                                        "sofa",
+                                        "train",
+                                        "tvmonitor"};
+#endif
 
-    static const unsigned char colors[19][3] = {
-        {54, 67, 244},
-        {99, 30, 233},
-        {176, 39, 156},
-        {183, 58, 103},
-        {181, 81, 63},
-        {243, 150, 33},
-        {244, 169, 3},
-        {212, 188, 0},
-        {136, 150, 0},
-        {80, 175, 76},
-        {74, 195, 139},
-        {57, 220, 205},
-        {59, 235, 255},
-        {7, 193, 255},
-        {0, 152, 255},
-        {34, 87, 255},
-        {72, 85, 121},
-        {158, 158, 158},
-        {139, 125, 96}};
+    static const unsigned char colors[19][3]
+        = {
+            {54, 67, 244},
+            {99, 30, 233},
+            {176, 39, 156},
+            {183, 58, 103},
+            {181, 81, 63},
+            {243, 150, 33},
+            {244, 169, 3},
+            {212, 188, 0},
+            {136, 150, 0},
+            {80, 175, 76},
+            {74, 195, 139},
+            {57, 220, 205},
+            {59, 235, 255},
+            {7, 193, 255},
+            {0, 152, 255},
+            {34, 87, 255},
+            {72, 85, 121},
+            {158, 158, 158},
+            {139, 125, 96}};
 
     int color_index = 0;
 
